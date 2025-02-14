@@ -1,0 +1,87 @@
+@Library('shared-lib') _
+pipeline {
+    agent any
+    environment {
+        NODE_VERSION = 'nodejs'
+        IMAGE_TAG = 'v1.0'
+        DOCKER_CREDENTIALS_ID = 'dockerhub'
+        DOCKER_REGISTRY = 'gevorgyan'
+    }
+    stages {
+        stage('Setup NodeJS') {
+            steps {
+                nodeSetup()
+            }
+        }
+        stage('Checkout') {
+            steps {
+                checkoutCode()
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    sh 'npm install'
+                }
+            }
+        }
+        stage('Test') {
+            steps {
+                script {
+                    sh 'npm test'
+                }
+            }
+        }
+        stage('Setup Docker') {
+            steps {
+                dockerSetup()
+            }
+        }
+        stage('Lint Dockerfile') {
+            steps {
+                script {
+                    sh 'docker run --rm -i hadolint/hadolint < Dockerfile'
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    buildDockerImage()
+                }
+            }
+        }
+        stage('Vulnerability Scan') {
+            steps {
+                script {
+                    vulnerabilityScan()
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh """
+                            docker login -u "${DOCKER_USER}" --password "${DOCKER_PASS}"
+                            export DOCKER_CLIENT_TIMEOUT=300
+                            export COMPOSE_HTTP_TIMEOUT=300
+                            docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        """
+                    }
+                }
+            }
+        }
+        stage('Trigger Deployment Pipelines') {
+            steps {
+                script {
+                    if (env.BRANCH_NAME == 'main') {
+                        build job: 'Deploy_to_main', wait: false
+                    } else if (env.BRANCH_NAME == 'dev') {
+                        build job: 'Deploy_to_dev', wait: false
+                    }
+                }
+            }
+        }
+    }
+}
