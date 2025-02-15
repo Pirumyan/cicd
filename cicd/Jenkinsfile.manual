@@ -1,4 +1,3 @@
-@Library('shared-lib') _
 pipeline {
     agent any
     parameters {
@@ -6,12 +5,18 @@ pipeline {
         string(name: 'IMAGE_TAG', defaultValue: 'v1.0', description: 'Tag of the Docker image to be deployed')
     }
     environment {
-        DOCKER_TOOL = 'docker'
+        DOCKER_CREDENTIALS_ID = 'dockerhub'
+        DOCKER_REGISTRY = 'gevorgyan'
     }
     stages {
         stage('Setup Docker') {
             steps {
-                dockerSetup()
+                script {
+                    sh '''
+                        echo "Setting up Docker..."
+                        docker --version
+                    '''
+                }
             }
         }
         stage('Deploy') {
@@ -31,7 +36,7 @@ pipeline {
                         docker stop $(docker ps -q --filter "name=${CONTAINER_NAME}") || true
                         docker rm $(docker ps -a -q --filter "name=${CONTAINER_NAME}") || true
                     '''
-                    sh "docker run -d --name ${CONTAINER_NAME} --expose ${PORT} -p ${PORT}:3000 ${IMAGE_NAME}:${params.IMAGE_TAG}"
+                    sh "docker run -d --name ${CONTAINER_NAME} --expose ${PORT} -p ${PORT}:3000 ${DOCKER_REGISTRY}/${IMAGE_NAME}:${params.IMAGE_TAG}"
                 }
             }
         }
