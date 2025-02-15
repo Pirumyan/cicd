@@ -1,4 +1,3 @@
-@Library('shared-lib') _
 pipeline {
     agent any
     environment {
@@ -6,16 +5,23 @@ pipeline {
         IMAGE_TAG = 'v1.0'
         DOCKER_CREDENTIALS_ID = 'dockerhub'
         DOCKER_REGISTRY = 'gevorgyan'
+        IMAGE_NAME = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
     }
     stages {
         stage('Setup NodeJS') {
             steps {
-                nodeSetup()
+                script {
+                    sh '''
+                        echo "Setting up Node.js..."
+                        node -v
+                        npm -v
+                    '''
+                }
             }
         }
         stage('Checkout') {
             steps {
-                checkoutCode()
+                checkout scm
             }
         }
         stage('Build') {
@@ -34,7 +40,12 @@ pipeline {
         }
         stage('Setup Docker') {
             steps {
-                dockerSetup()
+                script {
+                    sh '''
+                        echo "Setting up Docker..."
+                        docker --version
+                    '''
+                }
             }
         }
         stage('Lint Dockerfile') {
@@ -47,14 +58,14 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    buildDockerImage()
+                    sh "docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
         stage('Vulnerability Scan') {
             steps {
                 script {
-                    vulnerabilityScan()
+                    sh "docker scan ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
@@ -64,8 +75,6 @@ pipeline {
                     script {
                         sh """
                             docker login -u "${DOCKER_USER}" --password "${DOCKER_PASS}"
-                            export DOCKER_CLIENT_TIMEOUT=300
-                            export COMPOSE_HTTP_TIMEOUT=300
                             docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                         """
                     }
